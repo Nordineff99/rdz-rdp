@@ -1,4 +1,4 @@
-name: rdp.yml
+name: RDP
 
 on: [workflow_dispatch]
 
@@ -8,21 +8,34 @@ jobs:
     steps:
       - name: Download ngrok
         run: |
-          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive ngrok.zip
-          ./ngrok.exe authtoken 3FVFM2bLfZuzVrdOfREVlIRnSau_4eA7sUamkxxnfHkcSe66y
+          Invoke-WebRequest https://download.ngrok.com/windows/stable/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+          Expand-Archive ngrok.zip -DestinationPath ngrok
+
+      - name: Auth ngrok
+        run: ./ngrok/ngrok.exe authtoken 3FVFM2bLfZuzVrdOfREVlIRnSau_4eA7sUamkxxnfHkcSe66y
+
+      - name: Create RDP user
+        run: |
+          net user kamel123 Myp@ssw0rd123! /add
+          net localgroup administrators kamel123 /add
 
       - name: Enable RDP
         run: |
-          net user kamel123 MyStrong123 /add
-          net localgroup administrators kamel123 /add
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          ./ngrok.exe tcp 3389
 
-تشغيل الـ RDP:
-- ادخل على Actions ← اختر Run workflow
-- بعد انتهاء التشغيل، سيظهر رابط مثل:
-- افتح برنامج RDP على جهازك، واكتب الرابط في خانة السيرفر.
-- اسم المستخدم: kamel123
-- كلمة السر: MyStrong123
+      - name: Start ngrok and keep alive
+        run: |
+          $job = Start-Job -ScriptBlock { ./ngrok/ngrok.exe tcp 3389 --log=stdout }
+          Start-Sleep -Seconds 10
+          $response = Invoke-WebRequest http://127.0.0.1:4040/api/tunnels -UseBasicParsing
+          $json = $response.Content | ConvertFrom-Json
+          $url = $json.tunnels[0].public_url
+          Write-Host "===================================="
+          Write-Host "RDP CONNECTION DETAILS:"
+          Write-Host "Server: $url"
+          Write-Host "Username: kamel123"
+          Write-Host "Password: Myp@ssw0rd123!"
+          Write-Host "===================================="
+          Write-Host "Waiting for 6 hours..."
+          Start-Sleep -Seconds 21600
