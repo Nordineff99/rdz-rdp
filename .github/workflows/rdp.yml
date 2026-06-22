@@ -5,37 +5,100 @@ on: [workflow_dispatch]
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+      RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+      RDP_USERNAME: kamel123
+
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download ngrok
+        shell: powershell
         run: |
-          Invoke-WebRequest https://download.ngrok.com/windows/stable/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive ngrok.zip -DestinationPath ngrok
+          $url = 'https://download.ngrok.com/windows/stable/ngrok-v3-stable-windows-amd64.zip'
+          Invoke-WebRequest -Uri $url -OutFile ngrok.zip
+          Expand-Archive -Path ngrok.zip -DestinationPath ngrok -Force
+          $ngrokExe = Get-ChildItem -Path ngrok -Filter 'ngrok.exe' -Recurse | Select-Object -First 1
+          if (-not $ngrokExe) {
+            Write-Error "ngrok.exe not found after extracting ngrok.zip"
+            exit 1
+          }
+          Write-Host "ngrok executable: $($ngrokExe.FullName)"
+          "NGROK_EXE=$($ngrokExe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Auth ngrok
-        run: ./ngrok/ngrok.exe authtoken 3FVFM2bLfZuzVrdOfREVlIRnSau_4eA7sUamkxxnfHkcSe66y
+        shell: powershell
+        run: |
+          if (-not $env:NGROK_EXE) {
+            Write-Error "NGROK_EXE not set"
+            exit 1
+          }
+          & "$env:NGROK_EXE" config add-authtoken $env:NGROK_AUTHTOKEN
 
       - name: Create RDP user
+        shell: powershell
         run: |
-          net user kamel123 Myp@ssw0rd123! /add
-          net localgroup administrators kamel123 /add
+          $user = $env:RDP_USERNAME
+          $pass = $env:RDP_PASSWORD
+          if (-not $pass) { Write-Error "RDP_PASSWORD secret not set"; exit 1 }
+          net user $user $pass /add
+          net localgroup administrators $user /add
 
       - name: Enable RDP
+        shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Start ngrok and keep alive
+      - name: Start ngrok and wait for API
+        shell: powershell
         run: |
-          $job = Start-Job -ScriptBlock { ./ngrok/ngrok.exe tcp 3389 --log=stdout }
-          Start-Sleep -Seconds 10
-          $response = Invoke-WebRequest http://127.0.0.1:4040/api/tunnels -UseBasicParsing
-          $json = $response.Content | ConvertFrom-Json
-          $url = $json.tunnels[0].public_url
+          $ngrok = "$env:NGROK_EXE"
+          if (-not (Test-Path $ngrok)) {
+            Write-Error "ngrok executable not found at $ngrok"
+            exit 1
+          }
+
+          # Start ngrok detached and capture the process
+          $proc = Start-Process -FilePath $ngrok -ArgumentList 'tcp 3389 --log=stdout' -WindowStyle Hidden -PassThru
+          Write-Host "Started ngrok pid=$($proc.Id)"
+
+          # Poll ngrok API until it reports a tunnel or timeout
+          $maxWaitSeconds = 60
+          $interval = 2
+          $elapsed = 0
+          $tunnelInfo = $null
+
+          while ($elapsed -lt $maxWaitSeconds) {
+            try {
+              $resp = Invoke-RestMethod -Uri 'http://127.0.0.1:4040/api/tunnels' -UseBasicParsing -ErrorAction Stop
+              if ($resp.tunnels -and $resp.tunnels.Count -gt 0) {
+                $tunnelInfo = $resp.tunnels[0]
+                break
+              }
+            } catch {
+              # API not ready yet
+            }
+            Start-Sleep -Seconds $interval
+            $elapsed += $interval
+          }
+
+          if (-not $tunnelInfo) {
+            Write-Error "ngrok did not report an active tunnel within $maxWaitSeconds seconds. Check ngrok process and logs."
+            # Optionally show ngrok processes
+            Get-Process | Where-Object { $_.ProcessName -like 'ngrok*' } | Format-List -Property Id,ProcessName,StartTime
+            exit 1
+          }
+
+          $url = $tunnelInfo.public_url
           Write-Host "===================================="
           Write-Host "RDP CONNECTION DETAILS:"
           Write-Host "Server: $url"
-          Write-Host "Username: kamel123"
-          Write-Host "Password: Myp@ssw0rd123!"
+          Write-Host "Username: $env:RDP_USERNAME"
+          Write-Host "(Password is stored as a secret)"
           Write-Host "===================================="
+
           Write-Host "Waiting for 6 hours..."
           Start-Sleep -Seconds 21600
