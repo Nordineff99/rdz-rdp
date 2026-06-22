@@ -13,7 +13,7 @@ jobs:
 
       - name: Auth and connect Tailscale
         run: |
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey tskey-auth-k2vabBGVgP11CNTRL-WEA94qYdebBmnvToHKiWbBv6frbCnEw7Q
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey tskey-auth-kC1jGwnEPs11CNTRL-XjHNS1nQzqWpZpw3aFCXqWGZCBhUT8fz
           Start-Sleep -Seconds 10
           $ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           "TAILSCALE_IP=$ip" | Out-File -FilePath $env:GITHUB_ENV -Append
