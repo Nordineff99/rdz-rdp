@@ -19,7 +19,6 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           ./ngrok.exe tcp 3389
-🔄 استبدل YOUR_AUTH_TOKEN برمز ngrok الخاص بك.
 
 تشغيل الـ RDP:
 - ادخل على Actions ← اختر Run workflow
