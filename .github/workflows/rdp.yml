@@ -6,11 +6,10 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Install ngrok via choco
-        run: choco install ngrok -y
-
-      - name: Auth ngrok
-        run: ngrok.exe authtoken 3FVFM2bLfZuzVrdOfREVlIRnSau_4eA7sUamkxxnfHkcSe66y
+      - name: Download bore
+        run: |
+          curl -L https://github.com/ekzhang/bore/releases/latest/download/bore-v0.5.3-x86_64-pc-windows-msvc.zip -o bore.zip
+          tar -xf bore.zip
 
       - name: Create RDP user
         run: |
@@ -22,25 +21,19 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Start ngrok tunnel
+      - name: Start tunnel
         run: |
-          Start-Process -NoNewWindow -FilePath ngrok.exe -ArgumentList "tcp 3389"
-          Start-Sleep -Seconds 10
-          $retry = 0
-          do {
-            try {
-              $response = Invoke-WebRequest http://127.0.0.1:4040/api/tunnels -UseBasicParsing
-              $json = $response.Content | ConvertFrom-Json
-              $url = $json.tunnels[0].public_url
-              $retry = 10
-            } catch {
-              $retry++
-              Start-Sleep -Seconds 5
-            }
-          } while ($retry -lt 10)
+          $job = Start-Job -ScriptBlock {
+            $p = Start-Process -FilePath .\bore.exe -ArgumentList "local 3389 --to bore.pub" -NoNewWindow -RedirectStandardOutput bore.log -PassThru
+            $p.WaitForExit()
+          }
+          Start-Sleep -Seconds 8
+          $log = Get-Content bore.log -ErrorAction SilentlyContinue
+          Write-Host "===================================="
+          Write-Host "BORE LOG: $log"
           Write-Host "===================================="
           Write-Host "RDP CONNECTION DETAILS:"
-          Write-Host "Server: $url"
+          Write-Host "Server: bore.pub"
           Write-Host "Username: kamel123"
           Write-Host "Password: Myp@ssw0rd123!"
           Write-Host "===================================="
