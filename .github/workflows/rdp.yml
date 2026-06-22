@@ -6,10 +6,24 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Download bore
+      - name: Install Tailscale
         run: |
-          curl -L https://github.com/ekzhang/bore/releases/latest/download/bore-v0.5.3-x86_64-pc-windows-msvc.zip -o bore.zip
-          tar -xf bore.zip
+          curl -L https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi -o tailscale.msi
+          msiexec /i tailscale.msi /quiet /qn
+
+      - name: Auth and connect Tailscale
+        run: |
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey tskey-auth-k2vabBGVgP11CNTRL-WEA94qYdebBmnvToHKiWbBv6frbCnEw7Q
+          Start-Sleep -Seconds 5
+          $ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          Write-Host "===================================="
+          Write-Host "RDP CONNECTION DETAILS:"
+          Write-Host "Server: $ip"
+          Write-Host "Username: kamel123"
+          Write-Host "Password: Myp@ssw0rd123!"
+          Write-Host ""
+          Write-Host "Connect using the IP above via RDP"
+          Write-Host "===================================="
 
       - name: Create RDP user
         run: |
@@ -21,20 +35,7 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: Start tunnel
+      - name: Keep alive
         run: |
-          $job = Start-Job -ScriptBlock {
-            $p = Start-Process -FilePath .\bore.exe -ArgumentList "local 3389 --to bore.pub" -NoNewWindow -RedirectStandardOutput bore.log -PassThru
-            $p.WaitForExit()
-          }
-          Start-Sleep -Seconds 8
-          $log = Get-Content bore.log -ErrorAction SilentlyContinue
-          Write-Host "===================================="
-          Write-Host "BORE LOG: $log"
-          Write-Host "===================================="
-          Write-Host "RDP CONNECTION DETAILS:"
-          Write-Host "Server: bore.pub"
-          Write-Host "Username: kamel123"
-          Write-Host "Password: Myp@ssw0rd123!"
-          Write-Host "===================================="
+          Write-Host "Runner connected to your Tailnet. RDP to the IP above."
           Start-Sleep -Seconds 21600
