@@ -14,16 +14,15 @@ jobs:
       - name: Auth and connect Tailscale
         run: |
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey tskey-auth-k2vabBGVgP11CNTRL-WEA94qYdebBmnvToHKiWbBv6frbCnEw7Q
-          Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 10
           $ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-          Write-Host "===================================="
-          Write-Host "RDP CONNECTION DETAILS:"
-          Write-Host "Server: $ip"
-          Write-Host "Username: kamel123"
-          Write-Host "Password: Myp@ssw0rd123!"
-          Write-Host ""
-          Write-Host "Connect using the IP above via RDP"
-          Write-Host "===================================="
+          "TAILSCALE_IP=$ip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "===================================="
+          echo "RDP CONNECTION DETAILS:"
+          echo "Server: $ip"
+          echo "Username: kamel123"
+          echo "Password: Myp@ssw0rd123!"
+          echo "===================================="
 
       - name: Create RDP user
         run: |
@@ -37,5 +36,11 @@ jobs:
 
       - name: Keep alive
         run: |
-          Write-Host "Runner connected to your Tailnet. RDP to the IP above."
+          echo "===================================="
+          echo "RDP CONNECTION DETAILS:"
+          echo "Server: $env:TAILSCALE_IP"
+          echo "Username: kamel123"
+          echo "Password: Myp@ssw0rd123!"
+          echo "===================================="
+          echo "Runner is connected. RDP to the IP above."
           Start-Sleep -Seconds 21600
